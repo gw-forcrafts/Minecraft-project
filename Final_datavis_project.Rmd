@@ -1,0 +1,171 @@
+---
+title: "Data_vis_final_project"
+output: html_document
+date: "2026-05-05"
+---
+
+Packages 
+```{r}
+library(ggplot2)
+library(scales)
+library(tidyverse)
+library(MASS)
+```
+
+
+### Accessibility: What is the total amount of active players and how is that split among the two editions?
+```{r}
+player_base_basic <- data.frame(Edition = c("Java", "Bedrock"), players = c(32000000, 118000000))
+player_base <- read.csv("/Users/gwuys/Desktop/School/Data Visualization/Final Project/Data/Player_base.csv", header = T)
+
+### Pie chart of the active player count within each edition
+ggplot(player_base_basic, aes(x = "", y = players, fill = Edition)) +
+  geom_bar(stat = "identity", width = 1) +
+  geom_text(aes(label = label_number(scale = 1e-6, suffix = "M")(players)), 
+            position = position_stack(vjust = 0.5)) + 
+  scale_fill_manual(values = c("#B3EE3A", "#FFB90F")) +
+  coord_polar("y", start = 0) + 
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+### Bar graph of active player count based on electronic system used
+ggplot(player_base, aes(x = Edition,y = Player.count, fill = System)) +
+  geom_col() +
+  geom_text(aes(label = paste0(Player.count/1e6, "M")),
+            position = position_stack(vjust = 0.5), size = 3) +
+  coord_flip() +
+  scale_fill_manual(values = c("#698B22", "#A2CD5A","#B3EE3A", "#FFB90F")) +
+  scale_y_continuous(labels = function(x) paste0(x/1e6, "M")) +
+  ylab("Player count") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+### Answer: Bedrock wins in regards to accessibility because of its larger selection of eletronic systems that allows for cross-platform gameplay.
+```
+
+
+### Stability: Which edition seems to be more stable based on the amount of bugs that get patched per year? Which years have a significant amount of bugs between both editions?
+```{r}
+bugs <- read.csv("/Users/gwuys/Desktop/School/Data Visualization/Final Project/Data/Bugs.csv")
+
+### Combining total amount of bugs per year
+bugs_yearly <- bugs %>%
+  group_by(Year, Edition) %>%
+  summarise(total_bugs = sum(Bugs.fixed, na.rm = TRUE)) %>%
+  ungroup()
+
+
+### Ploting the line graph of the total number of bugs fixed per year
+ggplot(bugs_yearly, aes(x = Year, y = total_bugs, color = Edition)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  scale_color_manual(values = c("#B3EE3A", "#FFB90F")) +
+  labs(
+    x = "Year",
+    y = "Total bugs fixed"
+  ) +
+  theme_classic(base_size = 14) + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+### Running a Wilcoxon rank sum test to see the difference in the median of total bugs fixed between editions per year
+results <- bugs %>%
+  group_by(Year) %>%
+  summarise(p_value = wilcox.test(Bugs.fixed ~ Edition)$p.value)
+
+results
+
+### Answer: Overall, Java has had lower amounts of bug fixes throughout the years which indicates that the edition is more stable than it's counterpart. The p-values of the Wicoxon rank sum showcase that the notable years with significant differences between the amount of bugs fixed in two editions include 2012, 2018, 2024, and 2025. 
+```
+
+### Performance: How fast can players beat the game (defeat the ender dragon)? 
+```{r}
+speed <- read.csv("/Users/gwuys/Desktop/School/Data Visualization/Final Project/Data/speedrun.csv")
+
+### Boxplot of the fastest times to beat the game across both editions
+ggplot(speed, aes(x = Edition, y = IGT.in.mins, fill = Edition)) +
+  geom_boxplot(alpha = 0.6) +
+  labs(
+    x = "Edition",
+    y = "IGT (minutes)"
+  ) +
+  scale_fill_manual(values = c("#B3EE3A", "#FFB90F")) +
+ ylab("Time (minutes)") + 
+  theme_classic(base_size = 14) + 
+  theme(plot.title = element_text(hjust = 0.5), size = 5) + 
+  theme(legend.position = "none")
+
+### Running a Wilcoxon rank sum test to see if the median speedrun time in the Bedrock is statistically different from the median speed run time in Java
+wilcox.test(IGT.in.mins ~ Edition, data = speed)
+
+### Answer: Java players spent a shorter amount of time completing the game which indicates that they are not experiencing performance issues that would cause their runs to go for longer amounts of time. 
+```
+
+### Player Experience: Is there a difference between the average time spent on Minecraft from when the game is launched to when the player disconnects between both editions?
+```{r}
+sessions <- read_csv("/Users/gwuys/Desktop/School/Data Visualization/Final Project/Data/Session_stats.csv")
+
+### Bar graph of the average daily player session length per edition based on their game experience
+ggplot(sessions, aes(x = `player type`,
+                     y = average.session.in.mins,
+                     fill = Edition)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("#B3EE3A", "#FFB90F")) +
+  labs(
+    x = "Player type",
+    y = "Average session length (mins)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  theme(plot.title = element_text(hjust = 0.5), size = 5)
+
+### Answer: While looking at the plot, it looks to be that Java players have higher average session length across the player types, it is not statistically significant.
+```
+
+### Community: Are players more active on servers in one edition over the other? Is there a correlation between active server player count and edition?
+```{r}
+servers <- read.csv("/Users/gwuys/Desktop/School/Data Visualization/Final Project/Data/servers.csv")
+
+### Making edition categorical
+servers$Edition <- factor(servers$Edition)
+
+ggplot(servers, aes(x = Edition, y = Active.Players, fill = Edition)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#B3EE3A", "#FFB90F")) +
+  scale_y_log10() + 
+  ylab("Active players") +
+  theme_classic() + 
+  theme(legend.position = "none")
+
+### Running a glm to see whether edition is a significant predictor of server active player count
+model <- glm.nb(`Active.Players` ~ Edition, data = servers)
+summary(model)
+
+### Categorize servers into 4 sizes based on their active player count
+servers <- servers %>%
+  mutate(Size = case_when(
+    `Active.Players` > 10000 ~ "Mega",
+    `Active.Players` >= 1000 ~ "Large",
+    `Active.Players` >= 100 ~ "Medium",
+    TRUE ~ "Small"
+  ))
+
+names(servers)
+
+### Plot box of the amount of servers in 4 categorical sizes according to the active player count
+servers %>%
+  count(Size, Edition) %>%
+  ggplot(aes(
+    x = reorder(Size, -n),
+    y = n,
+    fill = Edition
+  )) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("#B3EE3A", "#FFB90F")) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  xlab("Size") + 
+  ylab("Number of servers")
+
+### Answer: Java looks to average a higher active server player count but it is not statistically different from Bedrock. 
+```
